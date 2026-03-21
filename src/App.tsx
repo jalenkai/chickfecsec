@@ -1971,6 +1971,18 @@ export default function App() {
           </div>
         </div>
       )}
+            {/* Footer */}
+      <footer className="p-6 border-t border-white/5 bg-[#0a0a0a] rounded-b-2xl flex justify-between items-center">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-[#00000]">智能人流分析系統</span>
+          </div>
+          <p className="text-sm text-[#00000]">© 2026 奇哥股份有限公司。保留所有權利。</p>
+          <div className="flex gap-6 text-sm font-medium text-[#00000]">
+            <a href="#" className="hover:text-[#F472B6]">隱私政策</a>
+            <a href="#" className="hover:text-[#F472B6]">服務條款</a>
+            <a href="#" className="hover:text-[#F472B6]">聯絡我們</a>
+          </div>
+      </footer>
     </div>
   );
 }
