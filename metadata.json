@@ -1,0 +1,7 @@
+{
+  "name": "智能人流分析系統",
+  "description": "即時影像辨識與數據監控，使用 TensorFlow.js 進行人流計數。",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
