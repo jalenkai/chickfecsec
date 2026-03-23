@@ -70,7 +70,15 @@ export default function App() {
   const [isFaceModelLoading, setIsFaceModelLoading] = useState(true);
   const [currentCount, setCurrentCount] = useState(0);
   const [peakCount, setPeakCount] = useState(0);
-  const [history, setHistory] = useState<{ timestamp: number; count: number; petCount?: number; zoneScores?: Record<string, number> }[]>([]);
+  const [history, setHistory] = useState<{ 
+    timestamp: number; 
+    count: number; 
+    petCount?: number; 
+    uniquePersonsToday?: number;
+    totalPetCountToday?: number;
+    zoneScores?: Record<string, number>;
+    zoneHits?: Record<string, number>;
+  }[]>([]);
   const [dataApiUrl, setDataApiUrl] = useState('');
   const [imageApiUrl, setImageApiUrl] = useState('');
   const [toast, setToast] = useState<{ message: string; type: 'error' | 'success' } | null>(null);
@@ -749,15 +757,21 @@ export default function App() {
       if (prev !== maxPersonCountInWindow) {
         // Log the change
         const currentZoneScores: Record<string, number> = {};
+        const currentZoneHits: Record<string, number> = {};
         zonesRef.current.forEach(z => {
-          currentZoneScores[z.name] = Math.min(10, Math.round((zoneHitsRef.current[z.id] || 0) / 30));
+          const hits = zoneHitsRef.current[z.id] || 0;
+          currentZoneScores[z.name] = Math.min(10, Math.round(hits / 30));
+          currentZoneHits[z.name] = hits;
         });
         
         setHistory(h => [...h, { 
           timestamp: now, 
           count: maxPersonCountInWindow,
           petCount: maxPetCountInWindow,
-          zoneScores: currentZoneScores
+          uniquePersonsToday: uniquePersonsTodayRef.current,
+          totalPetCountToday: totalPetCountTodayRef.current,
+          zoneScores: currentZoneScores,
+          zoneHits: currentZoneHits
         }].slice(-1000));
         
         // Update peak
@@ -1172,21 +1186,54 @@ export default function App() {
   const exportCSV = () => {
     const now = new Date();
     const zoneNames = zones.map(z => z.name);
-    const headers = ['時間', '店櫃代號', '人數', '寵物數', ...zoneNames.map(n => `熱點區域_${n}_分數(0-10)`)];
+    const headers = ['日期', '店櫃代號', '當日最高人數', '當日累計人數', '當日累計寵物', ...zoneNames.map(n => `熱點區域_${n}_當日熱度(0-10)`)];
     
-    const rows = history.map(stat => {
+    // Group history by day
+    const dailyStats: Record<string, {
+      maxCount: number;
+      maxUniquePersons: number;
+      maxTotalPets: number;
+      maxZoneHits: Record<string, number>;
+    }> = {};
+
+    history.forEach(stat => {
       const date = new Date(stat.timestamp);
-      const formattedDate = `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
+      const dateStr = `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}`;
       
+      if (!dailyStats[dateStr]) {
+        dailyStats[dateStr] = {
+          maxCount: 0,
+          maxUniquePersons: 0,
+          maxTotalPets: 0,
+          maxZoneHits: {}
+        };
+        zoneNames.forEach(name => {
+          dailyStats[dateStr].maxZoneHits[name] = 0;
+        });
+      }
+
+      dailyStats[dateStr].maxCount = Math.max(dailyStats[dateStr].maxCount, stat.count);
+      dailyStats[dateStr].maxUniquePersons = Math.max(dailyStats[dateStr].maxUniquePersons, stat.uniquePersonsToday || 0);
+      dailyStats[dateStr].maxTotalPets = Math.max(dailyStats[dateStr].maxTotalPets, stat.totalPetCountToday || 0);
+      
+      zoneNames.forEach(name => {
+        dailyStats[dateStr].maxZoneHits[name] = Math.max(dailyStats[dateStr].maxZoneHits[name], stat.zoneHits?.[name] || 0);
+      });
+    });
+
+    const rows = Object.entries(dailyStats).sort((a, b) => b[0].localeCompare(a[0])).map(([dateStr, stats]) => {
       const row = [
-        formattedDate,
+        dateStr,
         storeCode || '未設定',
-        stat.count.toString(),
-        (stat.petCount || 0).toString()
+        stats.maxCount.toString(),
+        stats.maxUniquePersons.toString(),
+        stats.maxTotalPets.toString()
       ];
       
       zoneNames.forEach(name => {
-        row.push((stat.zoneScores?.[name] || 0).toString());
+        const totalHits = stats.maxZoneHits[name];
+        const dailyScore = Math.min(10, Math.round(totalHits / 30));
+        row.push(dailyScore.toString());
       });
       
       return row;
